@@ -14,13 +14,13 @@ When the active layer fills up, the oldest neuron is automatically pushed down t
 ## Installation
 
 ```bash
-go get github.com/<your-username>/ai-memory
+go get github.com/junhekdevsru/ai-memory
 ```
 
 ## Quick start
 
 ```go
-import "github.com/<your-username>/ai-memory"
+import "github.com/junhekdevsru/ai-memory"
 
 // Create a region with a cap of 100 active neurons
 r, err := memory.NewRegion(100)
