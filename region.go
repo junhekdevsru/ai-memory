@@ -68,7 +68,7 @@ func (r *Region) Add(n Neuron) error {
 	}
 
 	if len(r.active) >= r.maxNeurons {
-		r.evictToCrumbs(0)
+		r.evictToCrumbs(r.lruIndex())
 	}
 
 	r.active = append(r.active, n)
@@ -86,12 +86,23 @@ func (r *Region) evictToCrumbs(index int) {
 	r.active = append(r.active[:index], r.active[index+1:]...)
 }
 
-func (r *Region) Lookup(title, theme string) (*Neuron, Location) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+func (r *Region) lruIndex() int {
+	oldest := 0
+	for i := 1; i < len(r.active); i++ {
+		if r.active[i].LastSeen.Before(r.active[oldest].LastSeen) {
+			oldest = i
+		}
+	}
+	return oldest
+}
 
-	for i, n := range r.active {
-		if n.Title == title && n.Theme == theme {
+func (r *Region) Lookup(title, theme string) (*Neuron, Location) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.active {
+		if r.active[i].Title == title && r.active[i].Theme == theme {
+			r.active[i].LastSeen = time.Now()
 			result := r.active[i]
 			return &result, Active
 		}
@@ -105,6 +116,25 @@ func (r *Region) Lookup(title, theme string) (*Neuron, Location) {
 	}
 
 	return nil, NotFound
+}
+
+func (r *Region) GetByID(id string) (*Neuron, Location) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	i, loc := r.findAny(id)
+	if loc == NotFound {
+		return nil, NotFound
+	}
+
+	if loc == Active {
+		r.active[i].LastSeen = time.Now()
+		result := r.active[i]
+		return &result, Active
+	}
+
+	result := r.crumbs[i]
+	return &result, Crumbs
 }
 
 func (r *Region) Link(a, b string) error {
@@ -164,6 +194,16 @@ func (r *Region) Crumbs() []Neuron {
 
 	result := make([]Neuron, len(r.crumbs))
 	copy(result, r.crumbs)
+
+	return result
+}
+
+func (r *Region) Edges() []Edge {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]Edge, len(r.edges))
+	copy(result, r.edges)
 
 	return result
 }
